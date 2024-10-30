@@ -1,62 +1,65 @@
-from fastapi import APIRouter, status, HTTPException
-from src.books.book_data import books
-from src.books.schemas import Book, BookUpdateModel
-from typing import List
+from fastapi import APIRouter, status, HTTPException, Depends
+from sqlmodel.ext.asyncio.session import AsyncSession
+from src.books.service import BookService
+
+# from src.books.schemas import Book, BookUpdateModel
+from src.books.models import BookCreateModel, BookUpdateModel, Book
+from src.db.main import get_session
+from typing import List, Annotated
 
 book_router = APIRouter()
+book_service = BookService()
+DBSession = Annotated[AsyncSession, Depends(get_session)]
 
 
 @book_router.get("/", response_model=List[Book])
-async def get_all_books():
+# async def get_all_books(session: AsyncSession = Depends(get_session)):
+async def get_all_books(session: DBSession):
+    books = await book_service.get_all_books(session=session)
     return books
 
 
-@book_router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_a_book(book_data: Book) -> dict:
-    # book_data 는 pydantic model인 Book 클래스의 인스턴스
-    # book_data.model_dump()는 인스턴스의 데이터를 dict로 변환한다.
-    new_book = book_data.model_dump()
-
-    books.append(new_book)
+@book_router.post("/", status_code=status.HTTP_201_CREATED, response_model=Book)
+# async def create_a_book(book_data: BookCreateModel, session: AsyncSession = Depends(get_session)) -> dict:
+async def create_a_book(book_data: BookCreateModel, session: DBSession) -> dict:
+    new_book = await book_service.create_book(book_data=book_data, session=session)
 
     return new_book  # dict 인 new_book를 리턴하면 fastapi가 json 문자열로 변경
 
 
-@book_router.get("/{book_id}")
-async def get_book(book_id: int) -> dict:
-    for book in books:
-        if book["id"] == book_id:
-            return book
+@book_router.get("/{book_uid}", response_model=Book)
+# async def get_book(book_uid: str, session: AsyncSession = Depends(get_session)) -> dict:
+async def get_book(book_uid: str, session: DBSession) -> dict:
+    book = await book_service.get_book(book_uid=book_uid, session=session)
 
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="Book not found"
-    )
-
-
-@book_router.patch("/{book_id}")
-async def update_book(book_id: int, book_update_data: BookUpdateModel) -> dict:
-    for book in books:
-        if book["id"] == book_id:
-            book["title"] = book_update_data.title
-            book["publisher"] = book_update_data.publisher
-            book["page_count"] = book_update_data.page_count
-            book["language"] = book_update_data.language
-
-            return book
-
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Book not found")
+    if book:
+        return book
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Book not found"
+        )
 
 
-@book_router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
+@book_router.patch("/{book_uid}", response_model=Book)
+# async def update_book(book_uid: str, book_update_data: BookUpdateModel, session: AsyncSession = Depends(get_session)) -> dict:
+async def update_book(book_uid: str, book_update_data: BookUpdateModel, session: DBSession) -> dict:
+    updated_book = await book_service.update_book(book_uid=book_uid, update_data=book_update_data, session=session)
+
+    if updated_book:
+        return updated_book
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Book not found")
+
+
+@book_router.delete("/{book_uid}", status_code=status.HTTP_204_NO_CONTENT)
 # status 204는 body를 보내면 안된다. 따라서 handler의 return type ->dict를 하면 안된다.
-async def delete_book(book_id: int):
-    for book in books:
-        if book["id"] == book_id:
-            books.remove(book)
-
-            return {}
-
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Book not found")
+# async def delete_book(book_uid: str, session: AsyncSession = Depends(get_session)):
+async def delete_book(book_uid: str, session: DBSession):
+    book_to_delete = await book_service.delete_book(book_uid=book_uid, session=session)
+    if book_to_delete:
+        return None
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Book not found")
