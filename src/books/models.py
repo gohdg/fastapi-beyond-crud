@@ -48,3 +48,36 @@ class BookUpdateModel(BookBase):
 @event.listens_for(Book, "before_update")
 def update_timestamp(mapper, connection, target):
     target.updated_at = datetime.now()
+
+
+###############################################
+# sqlite 사용시
+################################################
+'''
+from datetime import datetime, date
+import uuid
+from sqlmodel import SQLModel, Field
+from typing import Optional
+
+class BookBase(SQLModel):
+    title: str
+    author: str
+    publisher: str
+    published_date: date
+    page_count: int
+    language: str
+
+class Book(BookBase, table=True):
+    __tablename__ = "books"
+
+    uid: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        nullable=False,
+        primary_key=True
+    )
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+    def __repr__(self):
+        return f"<Book {self.title}>"
+'''
